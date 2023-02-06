@@ -5,13 +5,11 @@ import time
 from http import HTTPStatus
 
 import requests
-
 import telegram
-
 from dotenv import load_dotenv
+from telegram import TelegramError
 
-from exceptions import HtppError
-
+from exceptions import HtppError, IncorrectFormatError
 
 load_dotenv()
 
@@ -34,18 +32,11 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверка токенов."""
-    TOKEN_LIST = {
-        tuple(PRACTICUM_TOKEN): 'PRACTICUM_TOKEN',
-        tuple(TELEGRAM_TOKEN): 'TELEGRAM_TOKEN',
-        tuple(TELEGRAM_CHAT_ID): 'TELEGRAM_CHAT_ID'
-    }
-    for token in TOKEN_LIST:
-        try:
-            if TOKEN_LIST[token] is not None:
-                return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-            else:
-                raise Exception(f'Токен {token} недоступен')
-        except Exception:
+    TOKEN_LIST = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
+    for token_name in TOKEN_LIST:
+        if globals()[token_name]:
+            return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
+        else:
             logging.critical('Токен недоступен')
             sys.exit('Работа бота не осуществляется')
 
@@ -54,9 +45,14 @@ def send_message(bot, message):
     """Бот отправляет сообщение в чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logging.debug('Сообщение отправлено', exc_info=True)
-    except Exception as error:
-        logging.error(f'Сообщение не было отправлено: {error}', exc_info=True)
+        logging.debug('Попытка отправки сообщения', exc_info=True)
+    except TelegramError as error:
+        logging.exception(f'Сообщение: "{message}", не отправлено.'
+                          f'"{error}"', exc_info=True)
+    else:
+        logging.info(
+            f'Сообщение: "{message}", отправлено.'
+        )
 
 
 def get_api_answer(timestamp):
@@ -69,26 +65,43 @@ def get_api_answer(timestamp):
             headers=HEADERS,
             params=payload
         )
-    except Exception as error:
-        logging.error(f'Ошибка при запросе к API-сервису: {error}')
+    except requests.exceptions.RequestException as error:
+        raise ConnectionError(
+            'Ошибка соединения {error} с параметрами: '
+            '{url}, {headers}, {params}'.format(
+                error=error,
+                url=ENDPOINT,
+                headers=HEADERS,
+                params=payload
+            )
+        )
     if response.status_code != HTTPStatus.OK:
         raise HtppError('Ошибка соединения: {status}, {text}'.format(
             status=response.status_code,
             text=response.text))
-    return response.json()
+    try:
+        return response.json()
+    except TypeError as error:
+        raise IncorrectFormatError(
+            f'Формат ответа не json: {error}'
+        )
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
-        logging.error('Ответ API не соответствует формату')
-        raise TypeError('Ответ API не соответствует формату')
+        message = 'Ответ API не соответствует формату'
+        logging.error(message)
+        raise TypeError(message)
     if 'homeworks' not in response:
-        raise TypeError('Осутствуют ожидаемые ключи')
+        message = 'Осутствуют ожидаемые ключи'
+        raise TypeError(message)
     if 'current_date' not in response:
-        raise TypeError('Осутствуют ожидаемые ключи')
+        message = 'Осутствуют ожидаемые ключи'
+        raise TypeError(message)
     if not isinstance(response.get('homeworks'), list):
-        raise TypeError('Формат ответа не соответствует')
+        message = 'Формат ответа не соответствует'
+        raise TypeError(message)
     return response.get('homeworks')
 
 

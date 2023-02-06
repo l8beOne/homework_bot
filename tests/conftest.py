@@ -1,6 +1,5 @@
-import sys
 import os
-
+import sys
 
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root_dir)
@@ -25,4 +24,3 @@ pytest_plugins = [
 os.environ['PRACTICUM_TOKEN'] = 'sometoken'
 os.environ['TELEGRAM_TOKEN'] = '1234:abcdefg'
 os.environ['TELEGRAM_CHAT_ID'] = '12345'
-

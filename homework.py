@@ -28,6 +28,22 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
+STATUS_OF_MESSAGE = 'Сообщение: "{message}", {my_key}'
+TRY_MESSAGE = 'Попытка отправки сообщения'
+UNAVAILABLE_TOKEN = 'Токен недоступен'
+WORK_WAS_ENDED = 'Работа бота не осуществляется'
+NOT_JSON = 'Формат ответа не json: {error}'
+NOT_API_FORMAT = 'Ответ API не соответствует формату'
+INAPPROPRIATE_FORMAT = 'Формат ответа не соответствует'
+KEY_MISSED = 'Осутствуют ожидаемые ключи'
+NAME_IS_NOT_EXIST = 'Отсутствует имя домашней работы.'
+STATUS_IS_NOT_EXIST = 'Отсутствует статус проверки.'
+BOT_IS_WORKING = 'Бот работает'
+NO_TOKENS = 'Переменные окружения отсутствуют: {missed_tokens}'
+NOTHING_TO_CHECK = 'Нет заданий для проверки'
+PRACTICUM_TOKEN_ERROR = 'Токен Практикума недоступен'
+TELEGRAM_TOKEN_ERROR = 'Токен телеграм бота недоступен'
+TELEGRAM_CHAT_ID_ERROR = 'ID чата недоступно'
 
 
 def check_tokens():
@@ -35,17 +51,20 @@ def check_tokens():
     TOKEN_LIST = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
     for token_name in TOKEN_LIST:
         if globals()[token_name]:
-            return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-        else:
-            logging.critical('Токен недоступен')
-            sys.exit('Работа бота не осуществляется')
+            return token_name
+        elif token_name == 'PRACTICUM_TOKEN':
+            logging.critical(PRACTICUM_TOKEN_ERROR)
+        elif token_name == 'TELEGRAM_TOKEN':
+            logging.critical(TELEGRAM_TOKEN_ERROR)
+        elif token_name == 'TELEGRAM_CHAT_ID':
+            logging.critical(TELEGRAM_CHAT_ID_ERROR)
 
 
 def send_message(bot, message):
     """Бот отправляет сообщение в чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logging.debug('Попытка отправки сообщения', exc_info=True)
+        logging.debug(TRY_MESSAGE, exc_info=True)
     except TelegramError as error:
         logging.exception(f'Сообщение: "{message}", не отправлено.'
                           f'"{error}"', exc_info=True)
@@ -83,34 +102,30 @@ def get_api_answer(timestamp):
         return response.json()
     except TypeError as error:
         raise IncorrectFormatError(
-            f'Формат ответа не json: {error}'
+            NOT_JSON.format(error=error)
         )
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
-        message = 'Ответ API не соответствует формату'
-        logging.error(message)
-        raise TypeError(message)
+        logging.error(NOT_API_FORMAT)
+        raise TypeError(NOT_API_FORMAT)
     if 'homeworks' not in response:
-        message = 'Осутствуют ожидаемые ключи'
-        raise TypeError(message)
+        raise KeyError(KEY_MISSED)
     if 'current_date' not in response:
-        message = 'Осутствуют ожидаемые ключи'
-        raise TypeError(message)
+        raise KeyError(KEY_MISSED)
     if not isinstance(response.get('homeworks'), list):
-        message = 'Формат ответа не соответствует'
-        raise TypeError(message)
+        raise TypeError(INAPPROPRIATE_FORMAT)
     return response.get('homeworks')
 
 
 def parse_status(homework):
     """Извлекает из информации о конкретной домашней работе статус."""
     if 'homework_name' not in homework:
-        raise KeyError('Отсутствует имя домашней работы.')
+        raise KeyError(NAME_IS_NOT_EXIST)
     if 'status' not in homework:
-        raise KeyError('Отсутствует статус проверки.')
+        raise KeyError(STATUS_IS_NOT_EXIST)
     status = homework['status']
     if status not in HOMEWORK_VERDICTS:
         raise ValueError(
@@ -124,13 +139,11 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    logging.info('Бот работает')
-    try:
-        if check_tokens():
-            bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    except Exception:
-        logging.critical('Переменные окружения отсутствуют')
-        sys.exit('Программа остановлена')
+    logging.info(BOT_IS_WORKING)
+    if not check_tokens():
+        logging.critical(NO_TOKENS)
+        sys.exit(WORK_WAS_ENDED)
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     while True:
         try:
@@ -142,7 +155,7 @@ def main():
                 message = parse_status(homework)
                 send_message(bot, message)
             else:
-                logging.debug('Нет заданий для проверки')
+                logging.debug(NOTHING_TO_CHECK)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)

@@ -44,20 +44,30 @@ NOTHING_TO_CHECK = 'Нет заданий для проверки'
 PRACTICUM_TOKEN_ERROR = 'Токен Практикума недоступен'
 TELEGRAM_TOKEN_ERROR = 'Токен телеграм бота недоступен'
 TELEGRAM_CHAT_ID_ERROR = 'ID чата недоступно'
+CONNECTION_ERROR = ('Ошибка соединения {error} с параметрами: '
+                    '{url}, {headers}, {params}')
+HTTP_ERROR = 'Ошибка соединения: {status}, {text}'
+UNEXPECTED_STATUS = 'Неожиданный статус работы: "{status}"'
+STATUS_CHANGED = ('Изменился статус проверки работы "{homework_name}".'
+                  '{verdict}')
 
 
 def check_tokens():
     """Проверка токенов."""
-    TOKEN_LIST = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
-    for token_name in TOKEN_LIST:
-        if globals()[token_name]:
+    missed_tokens = []
+    for token_name in (
+        'PRACTICUM_TOKEN',
+        'TELEGRAM_TOKEN',
+        'TELEGRAM_CHAT_ID'
+    ):
+        if globals()[token_name] is None:
+            missed_tokens.append(token_name)
+            if len(missed_tokens) > 0:
+                logging.critical(
+                    NO_TOKENS.format(missed_tokens=missed_tokens)
+                )
+        else:
             return token_name
-        elif token_name == 'PRACTICUM_TOKEN':
-            logging.critical(PRACTICUM_TOKEN_ERROR)
-        elif token_name == 'TELEGRAM_TOKEN':
-            logging.critical(TELEGRAM_TOKEN_ERROR)
-        elif token_name == 'TELEGRAM_CHAT_ID':
-            logging.critical(TELEGRAM_CHAT_ID_ERROR)
 
 
 def send_message(bot, message):
@@ -66,11 +76,17 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(TRY_MESSAGE, exc_info=True)
     except TelegramError as error:
-        logging.exception(f'Сообщение: "{message}", не отправлено.'
-                          f'"{error}"', exc_info=True)
+        my_value = f'не отправлено. {error}'
+        logging.exception(
+            STATUS_OF_MESSAGE.format(
+                message=message,
+                my_key=my_value),
+            exc_info=True
+        )
     else:
+        my_value = 'отправлено.'
         logging.info(
-            f'Сообщение: "{message}", отправлено.'
+            STATUS_OF_MESSAGE.format(message=message, my_key=my_value)
         )
 
 
@@ -86,8 +102,7 @@ def get_api_answer(timestamp):
         )
     except requests.exceptions.RequestException as error:
         raise ConnectionError(
-            'Ошибка соединения {error} с параметрами: '
-            '{url}, {headers}, {params}'.format(
+            CONNECTION_ERROR.format(
                 error=error,
                 url=ENDPOINT,
                 headers=HEADERS,
@@ -95,7 +110,7 @@ def get_api_answer(timestamp):
             )
         )
     if response.status_code != HTTPStatus.OK:
-        raise HtppError('Ошибка соединения: {status}, {text}'.format(
+        raise HtppError(HTTP_ERROR.format(
             status=response.status_code,
             text=response.text))
     try:
@@ -128,13 +143,12 @@ def parse_status(homework):
         raise KeyError(STATUS_IS_NOT_EXIST)
     status = homework['status']
     if status not in HOMEWORK_VERDICTS:
-        raise ValueError(
-            f'Неожиданный статус работы: "{status}"'
-        )
+        raise ValueError(UNEXPECTED_STATUS.format(status=status))
     verdict = HOMEWORK_VERDICTS[status]
     homework_name = homework.get('homework_name')
-    return (f'Изменился статус проверки работы "{homework_name}".'
-            f'{verdict}')
+    return (STATUS_CHANGED.format(
+        homework_name=homework_name,
+        verdict=verdict))
 
 
 def main():

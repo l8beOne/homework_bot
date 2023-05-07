@@ -1,5 +1,5 @@
 # Python Telegram Bot
-<h1 align="center"><img src="https://tophallclub.ru/wp-content/uploads/6/b/7/6b7ab28479760e3a47c318ae0a6af25f.gif" height="300" width="400"/></h1>
+<h1 align="center"><img src="https://tophallclub.ru/wp-content/uploads/d/5/0/d50bc3352ffaa7e92f952871e50c592e.gif" height="300" width="400"/></h1>
 
 ## Описание проекта:
 Написал Telegram-бота, который обращается к API сервиса Практикум.Домашка и узнаёт статус домашней работы. В случае изменений статуса, уведомляет об этом личным сообщением в телеграм.
